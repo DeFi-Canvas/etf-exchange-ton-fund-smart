@@ -25,13 +25,13 @@ contract StonFiSwapContract {
 
     fun swap_ton_to_jetton(offer_amount: Int, jetton_address: Address) {
         let msg_body: Cell = beginCell()
-            .storeUint(0x18, 6) 
+            .storeUint(0x18, 6)  
             .storeAddress(STONFI_ROUTER_ADDRESS)  
-            .storeCoins(offer_amount)
-            .storeAddress(myAddress())
-            .storeUint(12345, 64) 
+            .storeCoins(offer_amount)  
+            .storeAddress(myAddress()) 
+            .storeUint(12345, 64)  // request id
             .storeAddress(jetton_address)  
-            .storeCoins(1)  
+            .storeCoins(1)  // min jetton amount 
             .endCell();
 
         send(SendParameters {
