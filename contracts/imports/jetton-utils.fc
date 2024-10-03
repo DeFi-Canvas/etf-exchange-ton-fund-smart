@@ -1,0 +1,55 @@
+cell pack_jetton_wallet_data(slice fund_addr, slice owner_addr, slice stonfi_addr, cell jettons_data, cell liquidity_manager_code) inline {
+   return  begin_cell()
+            .store_slice(fund_addr)
+            .store_slice(owner_addr)
+            .store_slice(stonfi_addr)
+            .store_dict(jettons_data)
+            .store_ref(liquidity_manager_code)
+           .end_cell();
+}
+
+cell calculate_jetton_wallet_state_init(slice fund_addr, slice owner_addr, slice stonfi_addr, cell jettons_data, cell liquidity_manager_code) inline {
+  cell new_jettons_data = new_dict();
+
+  (int index, slice jetton_data, int flag) = jettons_data.idict_get_min?(8);
+  while (flag) {
+    slice jetton_wallet = jetton_data~load_msg_addr();
+    int jetton_amount = jetton_data~load_coins();
+    slice new_jetton_data = begin_cell().store_slice(jetton_wallet).store_coins(0).end_cell().begin_parse();
+    new_jettons_data~udict_set(8, index, new_jetton_data);
+    (int index, slice jetton_data, int flag) = jettons_data.idict_get_next?(8, index);
+  }
+
+  return begin_cell()
+          .store_uint(0, 2)
+          .store_dict(jetton_wallet_code)
+          .store_dict(pack_jetton_wallet_data(fund_addr, owner_addr, stonfi_addr, new_jettons_data, liquidity_manager_code))
+          .store_uint(0, 1)
+         .end_cell();
+}
+
+slice calculate_jetton_wallet_address(cell state_init) inline {
+  return begin_cell().store_uint(4, 3)
+                     .store_int(workchain(), 8)
+                     .store_uint(cell_hash(state_init), 256)
+                     .end_cell()
+                     .begin_parse();
+}
+
+slice calculate_user_jetton_wallet_address(slice fund_addr, slice owner_addr, slice stonfi_addr, cell liquidity_manager_code) inline {
+  return calculate_jetton_wallet_address(calculate_jetton_wallet_state_init(owner_address, jetton_master_address, jetton_wallet_code));
+}
+
+int calculate_balance(cell jettons_data) inline {
+  (int index, slice jetton_data, int flag) = jettons_data.idict_get_min?(8);
+  int balance = 0;
+  int count = 0;
+  while (flag) {
+    slice jetton_wallet = jetton_data~load_msg_addr();
+    int jetton_amount = jetton_data~load_coins();
+    balance += jetton_amount;
+    count += 1;
+    (int index, slice jetton_data, int flag) = jettons_data.idict_get_next?(8, index);
+  }
+  return (balance / count);
+}
