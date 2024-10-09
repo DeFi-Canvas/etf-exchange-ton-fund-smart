@@ -249,9 +249,8 @@ global cell storage::jettons_data;
   cell stonfi_wallets = in_msg_body~load_dict();
   (int index, slice jetton_data, int flag) = stonfi_wallets.udict_get_min?(256);
   while(flag) {
-    jetton_data = jetton_data~load_ref().begin_parse();
-    slice stonfi_wallet = jetton_data~load_msg_addr();
     int coef = jetton_data~load_uint(8);
+    slice stonfi_wallet = jetton_data~load_msg_addr();
     swap_tokens(STONFI_PTON_ADDR, stonfi_wallet, usefull_value * coef / 100, 1, STONFI_ROUTER, storage::owner_addr);
     (index, jetton_data, flag) = stonfi_wallets.udict_get_next?(256, index);
   }
@@ -306,11 +305,6 @@ global cell storage::jettons_data;
 
   if (op == op::transfer_notification()) {
     swap_execution(in_msg_body, sender_address, msg_value, fwd_fee);
-    return ();
-  }
-
-  if (op == op::deposit_liquidity()) {
-    start_deposit(in_msg_body,sender_address,msg_value,fwd_fee);
     return ();
   }
 

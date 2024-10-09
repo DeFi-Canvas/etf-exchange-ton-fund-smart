@@ -1,4 +1,6 @@
 int workchain() asm "0 PUSHINT";
+const STONFI_PTON_ADDR = "kQARULUYsmJq1RiZ-YiH-IJLcAZUVkVff-KBPwEmmaQGHx0I"a;
+
 
 () force_chain(slice addr) impure {
   (int wc, _) = parse_std_addr(addr);
