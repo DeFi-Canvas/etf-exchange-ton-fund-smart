@@ -39,7 +39,7 @@
         .store_slice(stonfi_router_addr)       
         .store_slice(owner) 
         .store_uint(0, 1)
-        .store_coins(50000000)
+        .store_coins(150000000)
         .store_maybe_ref(payload)         
         .end_cell();
 

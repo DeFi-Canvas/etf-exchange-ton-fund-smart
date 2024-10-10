@@ -16,6 +16,7 @@ export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
                       .storeRef(config.content)
                       .storeRef(config.lm_code)
                       .storeRef(config.lh_code)
+                      .storeUint(0, 1)
            .endCell();
 }
 

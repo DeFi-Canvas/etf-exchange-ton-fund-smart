@@ -68,19 +68,21 @@ export class JettonWallet implements Contract {
                     = InternalMsgBody;
     */
     static burnMessage(jetton_amount: bigint,
+                       responseAddress:Address,
                        customPayload: Cell | null) {
         return beginCell().storeUint(0x595f07bc, 32).storeUint(0, 64) // op, queryId
-                          .storeCoins(jetton_amount)
+                          .storeCoins(jetton_amount).storeAddress(responseAddress)
                           .storeMaybeRef(customPayload)
                .endCell();
     }
 
     async sendBurn(provider: ContractProvider, via: Sender, value: bigint,
                           jetton_amount: bigint,
+                          responseAddress:Address,
                           customPayload: Cell) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: JettonWallet.burnMessage(jetton_amount, customPayload),
+            body: JettonWallet.burnMessage(jetton_amount, responseAddress, customPayload),
             value:value
         });
 
@@ -88,15 +90,15 @@ export class JettonWallet implements Contract {
     /*
       withdraw_tons#107c49ef query_id:uint64 = InternalMsgBody;
     */
-    static goMessage() {
-        return beginCell().storeUint(0x8367f32a, 32).storeUint(0, 64) // op, queryId
+    static withdrawTonsMessage() {
+        return beginCell().storeUint(0x6d8e5e3c, 32).storeUint(0, 64) // op, queryId
                .endCell();
     }
 
-    async sendGO(provider: ContractProvider, via: Sender, msg_body: Cell) {
+    async sendWithdrawTons(provider: ContractProvider, via: Sender) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: msg_body,
+            body: JettonWallet.withdrawTonsMessage(),
             value:toNano('0.1')
         });
 

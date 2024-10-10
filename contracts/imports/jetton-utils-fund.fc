@@ -9,21 +9,16 @@ cell pack_jetton_wallet_data(slice owner_addr, slice fund_addr, cell jettons_dat
            .end_cell();
 }
 
-cell empty_jettons_data(cell jettons_data) inline {
+cell calculate_jetton_wallet_state_init(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
   cell new_jettons_data = new_dict();
 
   (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
   while (flag) {
-    (_, int coef) = (jetton_data~load_coins(), jetton_data~load_uint(8));
+    (_, _, int coef) = (jetton_data~load_coins(), jetton_data~load_coins(), jetton_data~load_uint(8));
     slice empty_jetton_data = begin_cell().store_coins(0).store_uint(coef, 8).end_cell().begin_parse();
     new_jettons_data~udict_set(256, index, empty_jetton_data);
     (index, jetton_data, flag) = jettons_data.udict_get_next?(256, index);
   }
-  return new_jettons_data;
-}
-
-cell calculate_jetton_wallet_state_init(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
-  cell new_jettons_data = empty_jettons_data(jettons_data);
   
 
   return begin_cell()

@@ -8,9 +8,10 @@
 
 cell pack_liquidity_helper_data(slice user_address, slice fund_address, cell jettons) inline {
    return  begin_cell()
-            .store_slice(fund_address)
             .store_slice(user_address)
+            .store_slice(fund_address)
             .store_dict(jettons)
+            .store_uint(0, 8)
            .end_cell();
 }
 
@@ -25,4 +26,20 @@ cell pack_liquidity_helper_data(slice user_address, slice fund_address, cell jet
          .end_cell();
 
     return (get_serialized_address(0, cell_hash(state_init)), state_init);
+}
+
+int calculate_supply(cell jettons_data) inline {
+  (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
+  int balance = 0;
+  int count = 0;
+  while (flag) {
+    int jetton_amount = jetton_data~load_coins();
+    balance += jetton_amount;
+    count += 1;
+    (index, jetton_data, flag) = jettons_data.udict_get_next?(256, index);
+  }
+  if (count == 0) {
+    count = 1;
+  } 
+  return (balance / count);
 }
