@@ -1,0 +1,24 @@
+int calculate_balance_lm(cell jettons_data) inline {
+  (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
+  int balance = 0;
+  int count = 0;
+  while (flag) {
+    int jetton_amount = jetton_data~load_coins();
+    balance += jetton_amount;
+    count += 1;
+    (index, jetton_data, flag) = jettons_data.udict_get_next?(256, index);
+  }
+  return (balance / count);
+}
+
+(builder) create_transfer_body_fund(int query_id, int fwd_amount, int jetton_amount, slice to, cell forward_payload, slice owner) inline {
+    return begin_cell()
+        .store_uint(0xf8a7ea5, 32)
+        .store_uint(query_id, 64)
+        .store_coins(jetton_amount)
+        .store_slice(to) ;; to_owner_address
+        .store_slice(owner)
+        .store_uint(0, 1)
+        .store_coins(fwd_amount) ;; forward_ton_amount
+        .store_maybe_ref(forward_payload);
+}
