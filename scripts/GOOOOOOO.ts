@@ -32,17 +32,15 @@ export async function run(provider: NetworkProvider, args: string[]) {
         .set(0, beginCell().storeAddress(not_addr).storeCoins(not_balance).endCell())
         .set(1, beginCell().storeAddress(bit_addr).storeCoins(bit_balance).endCell())
         .set(2, beginCell().storeAddress(hamster_addr).storeCoins(hamster_balance).endCell());
-    //console.log(a);
-    let msg_body = beginCell()
-                    .storeUint(0x2fd16ab4, 32)
-                    .storeUint(0, 64)
-                    .storeDict(a)
-                    .endCell();
 
-    
+    let msg_body = beginCell()
+        .storeUint(0x2fd16ab4, 32)
+        .storeUint(0, 64)
+        .storeDict(a)
+        .endCell();
 
     await LM.sendGO(provider.sender(), msg_body);
 
     //await provider.waitForDeploy(Fund.address);
-    console.log("WAIT SUKA");
+    console.log("DONE");
 }

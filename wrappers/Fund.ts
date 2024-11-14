@@ -1,34 +1,61 @@
 import { Address, Dictionary, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, toNano, internal as internal_relaxed, storeMessageRelaxed } from '@ton/core';
 
 import { Op } from './JettonConstants';
+import { sha256_sync } from '@ton/crypto';
 
-export type JettonMinterContent = {
-    type:0|1,
-    uri:string
+
+const ONCHAIN_CONTENT_PREFIX = 0x00;
+const SNAKE_DATA_PREFIX = 0x00;
+const toKey = (key: string) => {
+    return BigInt(`0x${sha256_sync(key).toString("hex")}`);
 };
+export const buildOnchainMetadata = (data: any): Cell => {
+    let dict = Dictionary.empty(
+        Dictionary.Keys.BigUint(256),
+        Dictionary.Values.Cell()
+    );
 
-export type JettonMinterConfig = {admin: Address; content: Cell; lm_code: Cell, lh_code: Cell};
+    Object.entries(data).forEach(([key, value]) => {
+        dict.set(toKey(key), beginCell().storeUint(SNAKE_DATA_PREFIX, 8).storeStringTail(value as string).endCell());
+    });
 
-export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
     return beginCell()
-                      .storeAddress(config.admin)
-                      .storeDict(Dictionary.empty())
-                      .storeRef(config.content)
-                      .storeRef(config.lm_code)
-                      .storeRef(config.lh_code)
-                      .storeUint(0, 1)
-           .endCell();
+        .storeInt(ONCHAIN_CONTENT_PREFIX, 8)
+        .storeDict(dict)
+        .endCell();
 }
 
-export function jettonContentToCell(content:JettonMinterContent) {
+export type JettonMinterContent = {
+    type: 0 | 1,
+    uri: string
+};
+
+export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell, jetton_wallet_code: Cell };
+
+export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
+    const codebase = beginCell()
+        .storeRef(config.lm_code)
+        .storeRef(config.lh_code)
+        .storeRef(config.jetton_wallet_code)
+        .endCell()
     return beginCell()
-                      .storeUint(content.type, 8)
-                      .storeStringTail(content.uri) //Snake logic under the hood
-           .endCell();
+        .storeAddress(config.admin)
+        .storeDict(Dictionary.empty())
+        .storeRef(config.content)
+        .storeRef(codebase)
+        .storeUint(0, 1)
+        .endCell();
+}
+
+export function jettonContentToCell(content: JettonMinterContent) {
+    return beginCell()
+        .storeUint(content.type, 8)
+        .storeStringTail(content.uri) //Snake logic under the hood
+        .endCell();
 }
 
 export class JettonMinter implements Contract {
-    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) {}
+    constructor(readonly address: Address, readonly init?: { code: Cell; data: Cell }) { }
 
     static createFromAddress(address: Address) {
         return new JettonMinter(address);
@@ -50,39 +77,39 @@ export class JettonMinter implements Contract {
 
 
     protected static jettonInternalTransfer(jetton_amount: bigint,
-                                            forward_ton_amount: bigint,
-                                            response_addr?: Address,
-                                            query_id: number | bigint = 0) {
+        forward_ton_amount: bigint,
+        response_addr?: Address,
+        query_id: number | bigint = 0) {
         return beginCell()
-                .storeUint(Op.internal_transfer, 32)
-                .storeUint(query_id, 64)
-                .storeCoins(jetton_amount)
-                .storeAddress(null)
-                .storeAddress(response_addr)
-                .storeCoins(forward_ton_amount)
-                .storeBit(false)
-               .endCell();
+            .storeUint(Op.internal_transfer, 32)
+            .storeUint(query_id, 64)
+            .storeCoins(jetton_amount)
+            .storeAddress(null)
+            .storeAddress(response_addr)
+            .storeCoins(forward_ton_amount)
+            .storeBit(false)
+            .endCell();
 
     }
     static mintMessage(from: Address, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, query_id: number | bigint = 0) {
-		const mintMsg = beginCell().storeUint(Op.internal_transfer, 32)
-                                   .storeUint(0, 64)
-                                   .storeCoins(jetton_amount)
-                                   .storeAddress(null)
-                                   .storeAddress(from) // Response addr
-                                   .storeCoins(forward_ton_amount)
-                                   .storeMaybeRef(null)
-                    .endCell();
+        const mintMsg = beginCell().storeUint(Op.internal_transfer, 32)
+            .storeUint(0, 64)
+            .storeCoins(jetton_amount)
+            .storeAddress(null)
+            .storeAddress(from) // Response addr
+            .storeCoins(forward_ton_amount)
+            .storeMaybeRef(null)
+            .endCell();
 
         return beginCell().storeUint(Op.mint, 32).storeUint(query_id, 64) // op, queryId
-                          .storeAddress(to)
-                          .storeCoins(total_ton_amount)
-                          .storeCoins(jetton_amount)
-                          .storeRef(mintMsg)
-               .endCell();
+            .storeAddress(to)
+            .storeCoins(total_ton_amount)
+            .storeCoins(jetton_amount)
+            .storeRef(mintMsg)
+            .endCell();
     }
     async sendMint(provider: ContractProvider, via: Sender, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint) {
-        if(total_ton_amount <= forward_ton_amount) {
+        if (total_ton_amount <= forward_ton_amount) {
             throw new Error("Total ton amount should be > forward amount");
         }
         await provider.internal(via, {
@@ -96,22 +123,22 @@ export class JettonMinter implements Contract {
     */
     static discoveryMessage(owner: Address, include_address: boolean) {
         return beginCell().storeUint(0x2c76b973, 32).storeUint(0, 64) // op, queryId
-                          .storeAddress(owner).storeBit(include_address)
-               .endCell();
+            .storeAddress(owner).storeBit(include_address)
+            .endCell();
     }
 
-    async sendDiscovery(provider: ContractProvider, via: Sender, owner: Address, include_address: boolean, value:bigint = toNano('0.1')) {
+    async sendDiscovery(provider: ContractProvider, via: Sender, owner: Address, include_address: boolean, value: bigint = toNano('0.1')) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: JettonMinter.discoveryMessage(owner, include_address),
             value: value,
         });
     }
-    
+
     static depositMessage(msg: Cell) {
         return beginCell().storeUint(0x8367f32a, 32).storeUint(0, 64) // op, queryId
-                          .storeRef(msg)
-               .endCell();
+            .storeRef(msg)
+            .endCell();
     }
 
     async sendDeposit(provider: ContractProvider, via: Sender, msg: Cell) {
@@ -124,8 +151,8 @@ export class JettonMinter implements Contract {
 
     static changeAdminMessage(newOwner: Address) {
         return beginCell().storeUint(Op.change_admin, 32).storeUint(0, 64) // op, queryId
-                          .storeAddress(newOwner)
-               .endCell();
+            .storeAddress(newOwner)
+            .endCell();
     }
 
     async sendChangeAdmin(provider: ContractProvider, via: Sender, newOwner: Address) {
@@ -137,8 +164,8 @@ export class JettonMinter implements Contract {
     }
     static changeContentMessage(content: Cell) {
         return beginCell().storeUint(Op.change_content, 32).storeUint(0, 64) // op, queryId
-                          .storeRef(content)
-               .endCell();
+            .storeRef(content)
+            .endCell();
     }
 
     async sendChangeContent(provider: ContractProvider, via: Sender, content: Cell) {

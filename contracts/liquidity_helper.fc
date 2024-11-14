@@ -44,10 +44,10 @@ global int storage::counter;
 
   int op = in_msg_body~load_uint(32);
   int query_id = in_msg_body~load_uint(64);
-  throw_unless(0xffff, op == op::deposit_liquidity());
   if (op == op::excesses()) {
     return ();
   }
+  throw_unless(0xffff, op == op::deposit_liquidity());
   throw_unless(111, equal_slices(storage::fund_addr, sender_address));
   slice jetton_wallet = in_msg_body~load_msg_addr();
   int jetton_amount = in_msg_body~load_coins();

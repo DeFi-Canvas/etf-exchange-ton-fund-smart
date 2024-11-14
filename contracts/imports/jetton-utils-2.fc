@@ -1,6 +1,6 @@
 slice null_addr() asm "b{00} PUSHSLICE";
 
-cell pack_jetton_wallet_fund_data(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
+cell pack_jetton_wallet_data_2(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
   return  begin_cell()
             .store_slice(fund_addr)
             .store_slice(owner_addr)
@@ -9,27 +9,32 @@ cell pack_jetton_wallet_fund_data(slice owner_addr, slice fund_addr, cell jetton
            .end_cell();
 }
 
-cell calculate_jetton_wallet_fund_state_init(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
+cell empty_jettons_data(cell jettons_data) inline {
   cell new_jettons_data = new_dict();
 
   (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
   while (flag) {
-    (_, _, int coef) = (jetton_data~load_coins(), jetton_data~load_coins(), jetton_data~load_uint(8));
+    (_, int coef) = (jetton_data~load_coins(), jetton_data~load_uint(8));
     slice empty_jetton_data = begin_cell().store_coins(0).store_uint(coef, 8).end_cell().begin_parse();
     new_jettons_data~udict_set(256, index, empty_jetton_data);
     (index, jetton_data, flag) = jettons_data.udict_get_next?(256, index);
   }
+  return new_jettons_data;
+}
+
+cell calculate_jetton_wallet_state_init_2(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
+  cell new_jettons_data = empty_jettons_data(jettons_data);
   
 
   return begin_cell()
           .store_uint(0, 2)
           .store_dict(liquidity_manager_code)
-          .store_dict(pack_jetton_wallet_fund_data(owner_addr, fund_addr, new_jettons_data, liquidity_manager_code))
+          .store_dict(pack_jetton_wallet_data_2(owner_addr, fund_addr, new_jettons_data, liquidity_manager_code))
           .store_uint(0, 1)
          .end_cell();
 }
 
-slice calculate_jetton_wallet_fund_address(cell state_init) inline {
+slice calculate_jetton_wallet_address_2(cell state_init) inline {
   return begin_cell().store_uint(4, 3)
                      .store_int(workchain(), 8)
                      .store_uint(cell_hash(state_init), 256)
@@ -37,7 +42,7 @@ slice calculate_jetton_wallet_fund_address(cell state_init) inline {
                      .begin_parse();
 }
 
-slice calculate_user_jetton_wallet_fund_address(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
-  return calculate_jetton_wallet_fund_address(calculate_jetton_wallet_fund_state_init(owner_addr, fund_addr, jettons_data, liquidity_manager_code));
+slice calculate_user_jetton_wallet_address_2(slice owner_addr, slice fund_addr, cell jettons_data, cell liquidity_manager_code) inline {
+  return calculate_jetton_wallet_address_2(calculate_jetton_wallet_state_init_2(owner_addr, fund_addr, jettons_data, liquidity_manager_code));
 }
 

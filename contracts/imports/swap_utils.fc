@@ -53,3 +53,49 @@
   
     send_raw_message(msg, 0); 
 }
+
+() swap_tokens_v2(slice jetton_wallet, slice stonfi_jetton_wallet, int jetton_amount, int min_out, slice owner) impure {
+    int fwd_gas = 300000000; ;; 0
+    int refund_fwd_gas = 300000000; ;; 0
+    int ref_fee = 10;
+    cell custom_payload = begin_cell().store_uint(0x4ff49f26,32).end_cell();
+    cell refund_payload = begin_cell().store_uint(0xb27195e8,32).end_cell();
+    cell cross_swap_body = begin_cell()
+        .store_coins(min_out)
+        .store_slice(my_address())
+        .store_coins(fwd_gas)
+        .store_maybe_ref(custom_payload)
+        .store_coins(refund_fwd_gas)
+        .store_maybe_ref(refund_payload)
+        .store_uint(ref_fee, 16)
+        .store_slice(my_address())
+        .end_cell();
+    int tx_deadline = now() + 15 * 60;
+    var payload = begin_cell()
+        .store_uint(1717886506, 32)  
+        .store_slice(stonfi_jetton_wallet) 
+        .store_slice(my_address()) 
+        .store_slice(my_address()) 
+        .store_uint(tx_deadline, 64)
+        .store_ref(cross_swap_body)
+        .end_cell();
+
+    var msg_body = begin_cell()
+        .store_uint(32736093, 32) 
+        .store_uint(0, 64) ;;queryId
+        .store_coins(jetton_amount - 200000000)     
+        .store_slice(my_address()) 
+        .store_int(true, 1)
+        .store_ref(payload)         
+        .end_cell();
+
+    var msg = begin_cell()
+        .store_uint(0x18, 6)   
+        .store_slice(jetton_wallet)  
+        .store_coins(90000000 + jetton_amount) ;; 0,09 ton  + SWAP_AMOUNT    
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1) ;; Mode 3
+        .store_ref(msg_body)
+        .end_cell();
+
+    send_raw_message(msg, 0); 
+}

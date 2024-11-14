@@ -1,7 +1,7 @@
 #include "imports/stdlib.fc";
 #include "imports/params.fc";
 #include "imports/op-codes.fc";
-#include "imports/jetton-utils.fc"; 
+#include "imports/jetton-utils-2.fc"; 
 #include "imports/swap_utils.fc";
 #include "imports/messages.fc";
 #include "imports/lm_utils.fc";
@@ -26,7 +26,7 @@ global cell storage::jettons_data;
 }
 
 () save_data() impure inline {
-  set_data(pack_jetton_wallet_data(storage::owner_addr, storage::fund_addr, storage::jettons_data, storage::liquidity_manager_code));
+  set_data(pack_jetton_wallet_data_2(storage::owner_addr, storage::fund_addr, storage::jettons_data, storage::liquidity_manager_code));
 }
 
 {-
@@ -50,8 +50,8 @@ global cell storage::jettons_data;
 
   throw_unless(705, equal_slices(storage::owner_addr, sender_address));
 
-  cell state_init = calculate_jetton_wallet_state_init(storage::fund_addr, to_owner_address, storage::liquidity_manager_code, storage::liquidity_manager_code);
-  slice to_wallet_address = calculate_jetton_wallet_address(state_init);
+  cell state_init = calculate_jetton_wallet_state_init_2(storage::fund_addr, to_owner_address, storage::liquidity_manager_code, storage::liquidity_manager_code);
+  slice to_wallet_address = calculate_jetton_wallet_address_2(state_init);
   slice response_address = in_msg_body~load_msg_addr();
   cell custom_payload = in_msg_body~load_dict();
 
@@ -93,13 +93,13 @@ global cell storage::jettons_data;
   int fwd_count = forward_ton_amount ? 2 : 1;
   throw_unless(709, msg_value >
                      forward_ton_amount +
-                     ;; 3 messages: wal1->wal2,  wal2->owner, wal2->response
-                     ;; but last one is optional (it is ok if it fails)
+    ;; 3 messages: wal1->wal2,  wal2->owner, wal2->response
+    ;; but last one is optional (it is ok if it fails)
                      fwd_count * fwd_fee +
-                     (2 * gas_consumption() + min_tons_for_storage()));
-                     ;; universal message send fee calculation may be activated here
-                     ;; by using this instead of fwd_fee
-                     ;; msg_fwd_fee(to_wallet, msg_body, state_init, 15)
+    (2 * gas_consumption() + min_tons_for_storage()));
+  ;; universal message send fee calculation may be activated here
+  ;; by using this instead of fwd_fee
+  ;; msg_fwd_fee(to_wallet, msg_body, state_init, 15)
 
   send_raw_message(msg.end_cell(), 64); ;; revert on errors
   save_data();
@@ -113,9 +113,9 @@ global cell storage::jettons_data;
   slice from_address = in_msg_body~load_msg_addr();
   slice response_address = in_msg_body~load_msg_addr();
   throw_unless(707,
-      equal_slices(storage::fund_addr, sender_address)
+    equal_slices(storage::fund_addr, sender_address)
       |
-      equal_slices(calculate_user_jetton_wallet_address(from_address, storage::fund_addr, storage::jettons_data, storage::liquidity_manager_code), sender_address)
+      equal_slices(calculate_user_jetton_wallet_address_2(from_address, storage::fund_addr, storage::jettons_data, storage::liquidity_manager_code), sender_address)
   );
   int forward_ton_amount = in_msg_body~load_coins();
 
@@ -228,52 +228,6 @@ global cell storage::jettons_data;
   save_data();
 }
 
-() swap_execution (slice in_msg_body, slice sender_address, int msg_value, int fwd_fee) impure {
-  
-  load_data();
-  int query_id = in_msg_body~load_uint(64);
-  (int jetton_amount, slice from_user) = (in_msg_body~load_coins(), in_msg_body~load_msg_addr());
-
-  ifnot (equal_slices(from_user, STONFI_ROUTER)) {
-    var msg = create_simple_transfer_body(query_id, 0, jetton_amount, from_user);
-    send_simple_message(0, sender_address, msg.end_cell(), 64);
-    return ();
-  }
-
-  force_chain(sender_address);
-
-
-  cell forward_payload = begin_cell()
-      .store_uint(op::swap_notification(), 32)
-      .store_slice(storage::owner_addr)
-      .end_cell();
-  var msg = create_transfer_body(query_id, 0, jetton_amount, storage::fund_addr, forward_payload);
-  send_simple_message(0, sender_address, msg.end_cell(), 64);
-
-  save_data();
-}
-
-() start_deposit (slice in_msg_body, slice sender_address, int msg_value, int fwd_fee) impure {
-  
-  load_data();
-  int query_id = in_msg_body~load_uint(64);
-
-  throw_unless(705, equal_slices(sender_address, storage::owner_addr) | equal_slices(storage::fund_addr, sender_address));
-  int usefull_value = msg_value - 500000000;
-  throw_unless(888, usefull_value > 0);
-  cell stonfi_wallets = in_msg_body~load_dict();
-  (int index, slice jetton_data, int flag) = stonfi_wallets.udict_get_min?(8);
-  while(flag) {
-    jetton_data = jetton_data~load_ref().begin_parse();
-    slice stonfi_wallet = jetton_data~load_msg_addr();
-    int coef = jetton_data~load_uint(8);
-    swap_tokens(STONFI_PTON_ADDR, stonfi_wallet, usefull_value * coef / 100, 1, STONFI_ROUTER, storage::owner_addr);
-    (index, jetton_data, flag) = stonfi_wallets.udict_get_next?(8, index);
-  }
-
-  save_data();
-}
-
 () on_bounce (slice in_msg_body) impure {
   in_msg_body~skip_bits(32); ;; 0xFFFFFFFF
   load_data();
@@ -320,33 +274,7 @@ global cell storage::jettons_data;
   }
 
   if (op == op::transfer_notification()) {
-    swap_execution(in_msg_body, sender_address, msg_value, fwd_fee);
     return ();
-  }
-
-  if (op == op::deposit_liquidity()) {
-    start_deposit(in_msg_body,sender_address,msg_value,fwd_fee);
-    return ();
-  }
-
-  if (op == "deposit_goooooo"c) {
-    load_data();
-    int query_id = in_msg_body~load_uint(64);
-    throw_unless(705, equal_slices(sender_address, storage::owner_addr) | equal_slices(storage::fund_addr, sender_address));
-    cell jetton_wallets = in_msg_body~load_dict();
-    (int index, slice jetton_data, int flag) = jetton_wallets.udict_get_min?(8);
-    while(flag) {
-      jetton_data = jetton_data~load_ref().begin_parse();
-      slice jetton_wallet = jetton_data~load_msg_addr();
-      int jetton_amount = jetton_data~load_coins();
-      cell forward_payload = begin_cell().store_uint(op::swap_notification(), 32).store_slice(storage::owner_addr).end_cell();
-      var body = create_transfer_body_fund(query_id, 80000000, jetton_amount, storage::fund_addr, forward_payload, storage::owner_addr);
-      send_simple_message(150000000, jetton_wallet, body.end_cell(), 0);
-      (index, jetton_data, flag) = jetton_wallets.udict_get_next?(8, index);
-   }
-
-   save_data();
-   return ();
   }
 
   if (op == op::excesses()) {
