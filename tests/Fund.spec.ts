@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, Dictionary, beginCell, address } from '@ton/core';
+import { Cell, toNano, Dictionary, beginCell, address, Address } from '@ton/core';
 import { JettonMinter, jettonContentToCell } from '../wrappers/Fund';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -26,11 +26,16 @@ describe('Fund', () => {
         const lm_code = await compile("Liquidity manager");
         const lh_code = await compile("Liquidity helper");
         const jetton_wallet_code = await compile("Jetton wallet");
+        const jetton_masters = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell())
+            .set(0, beginCell().storeAddress(address("kQCgCUoFUB3BOQLRSZWjeb7UUfciSjRF13OpLE_1Lcj_oX3M")).storeUint(20, 8).endCell())
+            .set(1, beginCell().storeAddress(address("kQBzdsJQOaxArlIN8_NOEGPu_Z7OVto9QMFcEPRnrSZ8Wnij")).storeUint(30, 8).endCell())
+            .set(2, beginCell().storeAddress(address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH")).storeUint(50, 8).endCell());
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
                     admin: admin,
                     content: content,
+                    jetton_masters,
                     lm_code: lm_code,
                     lh_code: lh_code,
                     jetton_wallet_code
@@ -39,15 +44,11 @@ describe('Fund', () => {
             )
         );
 
-        let a = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell())
-            .set(0, beginCell().storeAddress(address("kQCgCUoFUB3BOQLRSZWjeb7UUfciSjRF13OpLE_1Lcj_oX3M")).storeUint(20, 8).endCell())
-            .set(1, beginCell().storeAddress(address("kQBzdsJQOaxArlIN8_NOEGPu_Z7OVto9QMFcEPRnrSZ8Wnij")).storeUint(30, 8).endCell())
-            .set(2, beginCell().storeAddress(address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH")).storeUint(50, 8).endCell());
 
         let msg_body = beginCell()
             .storeUint(0x29c102d1, 32)
             .storeUint(0, 64)
-            .storeDict(a,)
+            .storeDict(jetton_masters,)
             .endCell();
 
         const deployResult = await Fund.sendDeploy(deployer.getSender(), toNano('0.25'), msg_body);
@@ -70,5 +71,4 @@ describe('Fund', () => {
         // blockchain and circusVault are ready to use
 
     });
-
 });

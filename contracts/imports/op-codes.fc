@@ -14,3 +14,4 @@ int op::deposit_liquidity() asm "0x69fa9bd4 PUSHINT";
 int op::init() asm "0x29c102d1 PUSHINT";
 int op::get_jetton_minter_addr() asm "0xc2e7027b PUSHINT";
 int op::deploy_LM() asm "0x8367f32a PUSHINT";
+int op::test() asm "0xd87f7e0c PUSHINT";

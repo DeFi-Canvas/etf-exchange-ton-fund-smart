@@ -30,7 +30,7 @@ export type JettonMinterContent = {
     uri: string
 };
 
-export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell, jetton_wallet_code: Cell };
+export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell, jetton_wallet_code: Cell, jetton_masters: Dictionary<any, any> };
 
 export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
     const codebase = beginCell()
@@ -41,6 +41,7 @@ export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
     return beginCell()
         .storeAddress(config.admin)
         .storeDict(Dictionary.empty())
+        .storeDict(config.jetton_masters)
         .storeRef(config.content)
         .storeRef(codebase)
         .storeUint(0, 1)
@@ -116,6 +117,15 @@ export class JettonMinter implements Contract {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: JettonMinter.mintMessage(this.address, to, jetton_amount, forward_ton_amount, total_ton_amount),
             value: total_ton_amount + toNano('0.015'),
+        });
+    }
+
+    async sendTest(provider: ContractProvider, via: Sender) {
+        const body = beginCell().storeUint(0xd87f7e0c, 32).storeUint(0, 64).endCell();
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: body,
+            value: toNano('0.2'),
         });
     }
 

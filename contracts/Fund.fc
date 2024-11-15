@@ -12,6 +12,7 @@ int provide_address_gas_consumption() asm "10000000 PUSHINT";
 
 global slice storage::admin;
 global cell storage::jettons_data;
+global cell storage::jetton_masters;
 global cell storage::content;
 global cell storage::liquidity_manager_code;
 global cell storage::liquidity_helper_code;
@@ -22,6 +23,7 @@ global int storage::init;
     slice ds = get_data().begin_parse();
     storage::admin = ds~load_msg_addr(); ;; storage::admin
     storage::jettons_data = ds~load_dict(); ;; total_supply
+    storage::jetton_masters = ds~load_dict(); ;; jetton_masters
     
     storage::content = ds~load_ref(); ;; storage::content
     cell codebase = ds~load_ref();
@@ -41,6 +43,7 @@ global int storage::init;
     set_data(begin_cell()
             .store_slice(storage::admin)
             .store_dict(storage::jettons_data)
+            .store_dict(storage::jetton_masters)
             .store_ref(storage::content)
             .store_ref(codebase)
             .store_uint(storage::init, 1)
@@ -161,17 +164,16 @@ global int storage::init;
         int opcode = forward_payload~load_uint(32);
         if (opcode == op::swap_successed()){
             ;; check swap coin address
-            cell jettons_data = storage::jettons_data;
             int is_valid_jetton = false;
-            (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(8);
+            (int index, slice jetton_data, int flag) = storage::jetton_masters.udict_get_min?(8);
             while (flag) {
-                jetton_data = jetton_data~load_ref().begin_parse();
-                slice jetton_master = jetton_data~load_msg_addr();
-                slice jetton_wallet_address = calculate_user_jetton_wallet_address(from_wallet, jetton_master, storage::jetton_wallet_code);
+                slice cs = jetton_data~load_ref().begin_parse();
+                slice jetton_master = cs~load_msg_addr();
+                slice jetton_wallet_address = calculate_user_jetton_wallet_address(my_address(), jetton_master, storage::jetton_wallet_code);
                 if(equal_slices(sender_address, jetton_wallet_address)){
-                    int is_valid_jetton = true;
+                    is_valid_jetton = true;
                 }
-                (index, jetton_data, flag) = storage::jettons_data.udict_get_next?(8, index);
+                (index, jetton_data, flag) = storage::jetton_masters.udict_get_next?(8, index);
             }
             throw_unless(120, is_valid_jetton);
 
