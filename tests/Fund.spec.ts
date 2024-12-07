@@ -35,6 +35,7 @@ describe('Fund', () => {
             .set(0, beginCell().storeAddress(address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")).storeUint(20, 8).storeUint(swapTypeStonFi, 8).storeAddress(stonfi_router).storeAddress(p_ton_wallet).endCell())
             .set(1, beginCell().storeAddress(address("EQCl0S4xvoeGeFGijTzicSA8j6GiiugmJW5zxQbZTUntre-1")).storeUint(30, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell())
             .set(2, beginCell().storeAddress(address("EQBlqsm144Dq6SjbPI4jjZvA1hqTIP3CvHovbIfW_t-SCALE")).storeUint(50, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell());
+        console.log("hello");
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
