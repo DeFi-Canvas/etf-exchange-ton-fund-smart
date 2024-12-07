@@ -30,6 +30,7 @@ describe('Fund', () => {
             .set(0, beginCell().storeAddress(address("kQCgCUoFUB3BOQLRSZWjeb7UUfciSjRF13OpLE_1Lcj_oX3M")).storeUint(20, 8).endCell())
             .set(1, beginCell().storeAddress(address("kQBzdsJQOaxArlIN8_NOEGPu_Z7OVto9QMFcEPRnrSZ8Wnij")).storeUint(30, 8).endCell())
             .set(2, beginCell().storeAddress(address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH")).storeUint(50, 8).endCell());
+        console.log("hello");
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
