@@ -12,7 +12,7 @@ export async function run(provider: NetworkProvider, args: string[]) {
 
     const jetton_amount = Number(args.length > 0 ? args[0] : await ui.input('How much to burn: '));
 
-    await LM.sendBurn(provider.sender(), toNano("0.2"), toNano(jetton_amount), Cell.EMPTY);
+    await LM.sendBurn(provider.sender(), toNano("2"), toNano(jetton_amount), Cell.EMPTY);
 
     //await provider.waitForDeploy(Fund.address);
     console.log("DONE");

@@ -30,18 +30,16 @@ export type JettonMinterContent = {
     uri: string
 };
 
-export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell, jetton_wallet_code: Cell, jetton_masters: Dictionary<any, any> };
+export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell };
 
 export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
     const codebase = beginCell()
         .storeRef(config.lm_code)
         .storeRef(config.lh_code)
-        .storeRef(config.jetton_wallet_code)
         .endCell()
     return beginCell()
         .storeAddress(config.admin)
         .storeDict(Dictionary.empty())
-        .storeDict(config.jetton_masters)
         .storeRef(config.content)
         .storeRef(codebase)
         .storeUint(0, 1)

@@ -25,20 +25,23 @@ describe('Fund', () => {
         let content = jettonContentToCell({ type: 0, uri: "" });
         const lm_code = await compile("Liquidity manager");
         const lh_code = await compile("Liquidity helper");
-        const jetton_wallet_code = await compile("Jetton wallet");
-        const jetton_masters = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell())
-            .set(0, beginCell().storeAddress(address("kQCgCUoFUB3BOQLRSZWjeb7UUfciSjRF13OpLE_1Lcj_oX3M")).storeUint(20, 8).endCell())
-            .set(1, beginCell().storeAddress(address("kQBzdsJQOaxArlIN8_NOEGPu_Z7OVto9QMFcEPRnrSZ8Wnij")).storeUint(30, 8).endCell())
-            .set(2, beginCell().storeAddress(address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH")).storeUint(50, 8).endCell());
+        const swapTypeDedust = 1;
+        const swapTypeStonFi = 2;
+        const pool_addr = address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")
+        const jetton_vault = address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")
+        const stonfi_router = address("kQALh-JBBIKK7gr0o4AVf9JZnEsFndqO0qTCyT-D-yBsWk0v")
+        const p_ton_wallet = address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")
+        let jetton_masters = Dictionary.empty(Dictionary.Keys.Uint(8), Dictionary.Values.Cell())
+            .set(0, beginCell().storeAddress(address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")).storeUint(20, 8).storeUint(swapTypeStonFi, 8).storeAddress(stonfi_router).storeAddress(p_ton_wallet).endCell())
+            .set(1, beginCell().storeAddress(address("EQCl0S4xvoeGeFGijTzicSA8j6GiiugmJW5zxQbZTUntre-1")).storeUint(30, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell())
+            .set(2, beginCell().storeAddress(address("EQBlqsm144Dq6SjbPI4jjZvA1hqTIP3CvHovbIfW_t-SCALE")).storeUint(50, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell());
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
                     admin: admin,
                     content: content,
-                    jetton_masters,
                     lm_code: lm_code,
                     lh_code: lh_code,
-                    jetton_wallet_code
                 },
                 await compile('Fund')
             )
@@ -59,6 +62,12 @@ describe('Fund', () => {
             deploy: true,
             success: true,
         });
+        const rawBody = "b5ee9c72010101010024000043800eecdbd4566ec867188c90b36c3ecd63c79a4fca4bd8781ae470a17ab58fa93370"
+        const body = Cell.fromBoc(Buffer.from(rawBody, "hex"))[0].beginParse()
+        console.log("1", body.loadAddress())
+        // console.log("2", body.loadUintBig(256).toString())
+        // console.log("3", body.loadUintBig(256).toString())
+        // console.log("4", body.loadUintBig(256).toString())
         // expect(deployResult.transactions).toHaveTransaction({
         //     from: Fund.address,
         //     to: address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH"),

@@ -99,3 +99,103 @@
 
     send_raw_message(msg, 0); 
 }
+
+() dedust_swap_jetton_to_ton(slice user, slice pool_addr, slice jetton_vault, slice jetton_wallet, int amount, int jetton_amount) impure {
+    int swap_op_code = 0xe3a0d482;
+    int swap_kind = 0;
+    int limit = 0;
+    int deadline = now() + 10 * 60;
+    slice recepient_addr = user;
+    slice referral_addr = user;
+    cell swap_params = begin_cell()
+            .store_uint(deadline, 32)
+            .store_slice(recepient_addr)
+            .store_slice(referral_addr)
+            .store_maybe_ref(null())
+            .store_maybe_ref(null())
+            .end_cell();
+
+    cell swap_body = begin_cell()
+            .store_uint(swap_op_code, 32)
+            .store_slice(pool_addr)
+            .store_uint(swap_kind, 1)
+            .store_coins(limit)
+            .store_maybe_ref(null())
+            .store_ref(swap_params)
+            .end_cell();
+    int jetton_transfer_op_code = 0x0f8a7ea5;
+    slice destination = jetton_vault;
+    slice response_destination = user;
+    int forward_ton_amount = 300000000;
+    cell jetton_transfer_body = begin_cell()
+            .store_uint(jetton_transfer_op_code, 32)
+            .store_uint(0, 64)
+            .store_coins(jetton_amount)
+            .store_slice(destination)
+            .store_slice(response_destination)
+            .store_maybe_ref(null())
+            .store_coins(forward_ton_amount)
+            .store_maybe_ref(swap_body)
+            .end_cell();
+        
+    var msg = begin_cell()
+        .store_uint(0x18, 6)   
+        .store_slice(jetton_wallet)  
+        .store_coins(amount)   
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1) ;; Mode 3
+        .store_ref(jetton_transfer_body)
+        .end_cell();
+
+    send_raw_message(msg, 0); 
+}
+
+() stonfi_v2_swap_jetton_to_ton(int amount, slice jetton_wallet, int jetton_amount,slice destination, slice response_destination, slice token_wallet, slice refund_address, slice excesses_address, slice receiver_address) impure {
+    int forward_ton_amount = 300000000;
+    int min = 1;
+    int custom_payload_forward_gas_amount = 300000000;
+    cell custom_payload = begin_cell().store_uint(0, 32).store_slice("success").end_cell();
+    int refund_forward_gas_amount = 300000000;
+    cell refund_payload = begin_cell().store_uint(0, 32).store_slice("failed").end_cell();
+    int referral_value = 100;
+    cell cross_swap_body = begin_cell()
+            .store_coins(min)
+            .store_slice(receiver_address)
+            .store_coins(custom_payload_forward_gas_amount)
+            .store_maybe_ref(custom_payload)
+            .store_coins(refund_forward_gas_amount)
+            .store_maybe_ref(refund_payload)
+            .store_uint(referral_value, 16)
+            .store_slice(receiver_address)
+            .end_cell();
+    int deadline = now() + 10 * 60;
+    cell swap_body = begin_cell()
+            .store_uint(1717886506, 32)
+            .store_slice(token_wallet)
+            .store_slice(refund_address)
+            .store_slice(excesses_address)
+            .store_uint(deadline, 64)
+            .store_ref(cross_swap_body)
+            .end_cell();
+    cell msg_body = begin_cell()
+            .store_uint(260734629, 32)
+            .store_uint(0, 64)
+            .store_coins(jetton_amount)
+            .store_slice(destination)
+            .store_slice(response_destination)
+            .store_int(false,1)
+            .store_coins(forward_ton_amount)
+            .store_int(true,1)
+            .store_ref(swap_body)
+            .end_cell();
+    
+    var msg = begin_cell()
+        .store_uint(0x18, 6)   
+        .store_slice(jetton_wallet)  
+        .store_coins(amount)   
+        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1) ;; Mode 3
+        .store_ref(msg_body)
+        .end_cell();
+
+    send_raw_message(msg, 0); 
+}
+
