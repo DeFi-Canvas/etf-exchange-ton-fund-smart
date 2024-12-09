@@ -1,0 +1,17 @@
+int op::transfer() asm "0xf8a7ea5 PUSHINT";
+int op::transfer_notification() asm "0x7362d09c PUSHINT";
+int op::internal_transfer() asm "0x178d4519 PUSHINT";
+int op::excesses() asm "0xd53276db PUSHINT";
+int op::burn() asm "0x595f07bc PUSHINT";
+int op::burn_notification() asm "0x7bdd97de PUSHINT";
+
+;; Fund
+int op::mint() asm "21 PUSHINT";
+int op::swap_notification() asm "0x278f5089 PUSHINT";
+int op::swap_successed() asm "0x4ff49f26 PUSHINT";
+int op::swap_failed() asm "0xb27195e8 PUSHINT";
+int op::deposit_liquidity() asm "0x69fa9bd4 PUSHINT";
+int op::init() asm "0x29c102d1 PUSHINT";
+int op::get_jetton_minter_addr() asm "0xc2e7027b PUSHINT";
+int op::deploy_LM() asm "0x8367f32a PUSHINT";
+int op::test() asm "0xd87f7e0c PUSHINT";

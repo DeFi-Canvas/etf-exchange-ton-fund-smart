@@ -1,4 +1,4 @@
-# StonFi
+# ETF
 
 ## Project structure
 
@@ -24,5 +24,3 @@
 ### Add a new contract
 
 `npx blueprint create ContractName` or `yarn blueprint create ContractName`
-# etf-exchange-ton-fund-smart
-# etf-exchange-ton-fund-smart

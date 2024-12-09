@@ -1,0 +1,355 @@
+#include "imports/stdlib.fc";
+#include "imports/constants.fc";
+#include "imports/params.fc";
+#include "imports/op-codes.fc";
+#include "imports/discovery-params.fc";
+#include "imports/jetton-utils-fund.fc"; 
+#include "imports/jetton-utils.fc"; 
+#include "imports/fund_utils.fc"; 
+#include "imports/messages.fc";
+#include "imports/swap_utils.fc";
+
+int provide_address_gas_consumption() asm "10000000 PUSHINT";
+
+global slice storage::admin;
+global cell storage::jettons_data;
+global cell storage::content;
+global cell storage::liquidity_manager_code;
+global cell storage::liquidity_helper_code;
+global int storage::init;
+
+() load_data() impure {
+    slice ds = get_data().begin_parse();
+    storage::admin = ds~load_msg_addr(); ;; storage::admin
+    storage::jettons_data = ds~load_dict(); ;; total_supply
+    
+    storage::content = ds~load_ref(); ;; storage::content
+    cell codebase = ds~load_ref();
+    slice cs_codebase = codebase.begin_parse();
+    storage::liquidity_manager_code = cs_codebase~load_ref(); ;; liquidity_manager_code
+    storage::liquidity_helper_code = cs_codebase~load_ref();
+    storage::init = ds~load_uint(1);
+}
+
+() save_data() impure inline {
+    cell codebase = begin_cell()
+            .store_ref(storage::liquidity_manager_code)
+            .store_ref(storage::liquidity_helper_code)
+    .end_cell();
+    set_data(begin_cell()
+            .store_slice(storage::admin)
+            .store_dict(storage::jettons_data)
+            .store_ref(storage::content)
+            .store_ref(codebase)
+            .store_uint(storage::init, 1)
+            .end_cell()
+    );
+}
+
+() mint_tokens(slice to_address, cell storage::liquidity_manager_code, int amount, cell master_msg) impure {
+    cell state_init = calculate_jetton_wallet_fund_state_init(to_address, my_address(), storage::jettons_data, storage::liquidity_manager_code);
+    slice to_wallet_address = calculate_jetton_wallet_fund_address(state_init);
+    var msg = begin_cell()
+            .store_uint(0x18, 6)
+            .store_slice(to_wallet_address)
+            .store_coins(amount)
+            .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+            .store_ref(state_init)
+            .store_ref(master_msg);
+    send_raw_message(msg.end_cell(), 1); ;; pay transfer fees separately, revert on errors
+}
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+    if (in_msg_body.slice_empty?()) { ;; ignore empty messages
+        return ();
+    }
+    slice cs = in_msg_full.begin_parse();
+    int flags = cs~load_uint(4);
+
+    if (flags & 1) { ;; ignore all bounced messages
+        load_data();
+        send_empty_message(0, storage::admin, 64);
+        return ();
+    }
+    slice sender_address = cs~load_msg_addr();
+    cs~load_msg_addr(); ;; skip dst
+    cs~load_coins(); ;; skip value
+    cs~skip_bits(1); ;; skip extracurrency collection
+    cs~load_coins(); ;; skip ihr_fee
+    int fwd_fee = muldiv(cs~load_coins(), 3, 2); ;; we use message fwd_fee for estimation of forward_payload costs
+    int op = in_msg_body~load_uint(32);
+    int query_id = in_msg_body~load_uint(64);
+
+    load_data();
+
+    if (op == op::mint()) {
+        throw_unless(73, equal_slices(sender_address, storage::admin));
+        slice to_address = in_msg_body~load_msg_addr();
+        int amount = in_msg_body~load_coins();
+        cell master_msg = in_msg_body~load_ref();
+        slice master_msg_cs = master_msg.begin_parse();
+        master_msg_cs~skip_bits(32 + 64); ;; op + query_id
+        int jetton_amount = master_msg_cs~load_coins();
+        mint_tokens(to_address, storage::liquidity_manager_code, amount, master_msg);
+        save_data();
+        return ();
+    }
+
+    if (op == op::burn_notification()) {
+        int innacurate_jetton_amount = in_msg_body~load_coins();
+        slice from_address = in_msg_body~load_msg_addr();
+        throw_unless(74,
+            equal_slices(calculate_user_jetton_wallet_fund_address(from_address, my_address(), storage::jettons_data, storage::liquidity_manager_code), sender_address)
+        );
+        cell burn_amount = in_msg_body~load_dict();
+
+        (int addr, slice jettons_data, int flag) = storage::jettons_data.udict_get_min?(256);
+        while (flag) {
+            (slice burn_jetton_data, int flag1) = burn_amount.udict_get?(256, addr);
+            int burn_lp_amount = burn_jetton_data~load_coins();
+            (int lp_amount, int jetton_amount, int coef, int swap_type, slice swap_addr1, slice swap_addr2) = (jettons_data~load_coins(), jettons_data~load_coins(), jettons_data~load_uint(8), jettons_data~load_uint(8), jettons_data~load_msg_addr(), jettons_data~load_msg_addr());
+            int withdraw_jetton_amount = burn_lp_amount * jetton_amount / lp_amount;
+            slice value = begin_cell()
+                    .store_coins(lp_amount - burn_lp_amount)
+                    .store_coins(jetton_amount - withdraw_jetton_amount)
+                    .store_uint(coef, 8)
+                    .store_uint(swap_type, 8)
+                    .store_slice(swap_addr1)
+                    .store_slice(swap_addr2)
+                    .end_cell().begin_parse();
+            storage::jettons_data~udict_set(256, addr, value);
+            slice jetton_wallet = begin_cell().store_uint(2, 2).store_uint(0, 8).store_uint(0, 1).store_uint(addr, 256).end_cell().begin_parse();
+            if(swap_type == const::swap_type_dedust()) {
+                slice pool_addr = swap_addr1;
+                slice jetton_vault = swap_addr2;
+                dedust_swap_jetton_to_ton(from_address, pool_addr, jetton_vault, jetton_wallet, 400000000, withdraw_jetton_amount);
+            }
+            if(swap_type == const::swap_type_stonfi()) {
+                slice stonfi_router = swap_addr1;
+                slice p_ton_wallet = swap_addr2;
+                stonfi_v2_swap_jetton_to_ton(400000000, jetton_wallet, withdraw_jetton_amount, stonfi_router, from_address, p_ton_wallet, from_address, from_address, from_address);
+            }
+            (addr, jettons_data, flag) = storage::jettons_data.udict_get_next?(256, addr);
+        }
+        save_data();
+        return ();
+    }
+
+    if (op == op::provide_wallet_address()) {
+        throw_unless(75, msg_value > fwd_fee + provide_address_gas_consumption());
+
+        slice owner_address = in_msg_body~load_msg_addr();
+        int include_address? = in_msg_body~load_uint(1);
+
+        cell included_address = include_address?
+                ? begin_cell().store_slice(owner_address).end_cell()
+                : null();
+
+        var msg = begin_cell()
+                .store_uint(0x18, 6)
+                .store_slice(sender_address)
+                .store_coins(0)
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                .store_uint(op::take_wallet_address(), 32)
+                .store_uint(query_id, 64);
+
+        if (is_resolvable?(owner_address)) {
+            msg = msg.store_slice(calculate_user_jetton_wallet_fund_address(owner_address, my_address(), storage::jettons_data, storage::liquidity_manager_code));
+        } else {
+            msg = msg.store_uint(0, 2); ;; addr_none
+        }
+        send_raw_message(msg.store_maybe_ref(included_address).end_cell(), 64);
+        return ();
+    }
+
+    if (op == op::transfer_notification()) {
+        int jetton_amount = in_msg_body~load_coins();
+        slice from_wallet = in_msg_body~load_msg_addr();
+        slice forward_payload = in_msg_body~load_ref().begin_parse();
+        int opcode = forward_payload~load_uint(32);
+        if (opcode == op::swap_successed()){
+            ;; check swap coin address
+            int is_valid_jetton = false;
+            (int addr, _, int flag) = storage::jettons_data.udict_get_min?(256);
+            (int wc, int sender_addr) = parse_std_addr(sender_address);
+            while (flag) {
+                if(sender_addr == addr){
+                    is_valid_jetton = true;
+                }
+                (addr, _, flag) = storage::jettons_data.udict_get_next?(256, addr);
+            }
+            throw_unless(120, is_valid_jetton);
+
+            ;; send message to liquidity helper
+            slice from_user = forward_payload~load_msg_addr();
+            (slice lh_address, cell state_init) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code);
+            var msg = begin_cell()
+                .store_uint(op::deposit_liquidity(), 32)
+                .store_uint(query_id, 64)
+                .store_slice(sender_address)
+                .store_coins(jetton_amount)
+            .end_cell();
+
+            send_message_with_stateinit(0, lh_address, state_init, msg, 64);
+            return ();
+        }
+        return ();
+    }
+
+    if (op == op::init()) {
+        throw_unless(73, equal_slices(sender_address, storage::admin));
+        throw_unless(1337, storage::init == 0);
+        cell jettons_data = in_msg_body~load_dict();
+        (int index, slice jetton_data, int flag) = jettons_data.udict_get_min?(8);
+        while (flag) {
+            jetton_data = jetton_data~load_ref().begin_parse();
+            slice jetton_master = jetton_data~load_msg_addr();
+            int coef = jetton_data~load_uint(8);
+            int swap_type = jetton_data~load_uint(8);
+            slice swap_addr1 = jetton_data~load_msg_addr();
+            slice swap_addr2 = jetton_data~load_msg_addr();
+            cell msg_body = begin_cell().store_uint(op::provide_wallet_address(), 32)
+                                    .store_uint(query_id, 64)
+                                    .store_slice(my_address())
+                                    .store_uint(0, 1)
+                                    .end_cell();
+            (int wc, int addr) = parse_std_addr(jetton_master);
+            slice value = begin_cell()
+                .store_coins(0)
+                .store_coins(0)
+                .store_uint(coef, 8)
+                .store_uint(swap_type, 8)
+                .store_slice(swap_addr1)
+                .store_slice(swap_addr2)
+                .end_cell()
+                .begin_parse();
+            storage::jettons_data~udict_set(256, addr, value);
+            send_simple_message(50000000, jetton_master, msg_body, 0);
+            (index, jetton_data, flag) = jettons_data.udict_get_next?(8, index);
+        }
+        save_data();
+        return ();
+    }
+
+    if (op == op::take_wallet_address()) {
+        (int wc, int addr) = parse_std_addr(sender_address);
+        (slice jetton_data, int flag) = storage::jettons_data~udict_delete_get?(256, addr);
+        throw_unless(111, flag);
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+        (int wc, int addr1) = parse_std_addr(jetton_wallet_address);
+
+        storage::jettons_data~udict_set(256, addr1, jetton_data);
+        save_data();
+        return ();
+    }
+
+    if (op == op::deposit_liquidity()) {
+        slice from_user = in_msg_body~load_msg_addr();
+        (slice lh_address, _) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code);
+        throw_unless(119, equal_slices(lh_address, sender_address));
+        cell mint_payload = new_dict();
+        cell jettons_data = in_msg_body~load_dict();
+        int inaccurate_jetton_amount = 0;
+        (int addr, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
+        while(flag) {
+            (slice actual_jetton_data, int flag_1) = storage::jettons_data.udict_get?(256, addr);
+            throw_unless(111, flag_1 != 0);
+            (int lp_supply, int actual_jetton_amount, int coef, int swap_type, slice swap_addr1, slice swap_addr2) = (actual_jetton_data~load_coins(), actual_jetton_data~load_coins(), actual_jetton_data~load_uint(8), actual_jetton_data~load_uint(8), actual_jetton_data~load_msg_addr(), actual_jetton_data~load_msg_addr());
+            int jetton_amount = jetton_data~load_coins();
+
+            int new_lp = 0;
+            if (lp_supply == 0) {
+                new_lp = 1000000000000;
+            }
+            else {
+                new_lp = jetton_amount * lp_supply / actual_jetton_amount;
+            }
+            inaccurate_jetton_amount += new_lp;
+            slice value = begin_cell().store_coins(new_lp).end_cell().begin_parse();
+            mint_payload~udict_set(256, addr, value);
+            slice new_jetton_data = begin_cell()
+                    .store_coins(lp_supply + new_lp)
+                    .store_coins(actual_jetton_amount + jetton_amount)
+                    .store_uint(coef, 8)
+                    .store_uint(swap_type, 8)
+                    .store_slice(swap_addr1)
+                    .store_slice(swap_addr2)
+                    .end_cell()
+                    .begin_parse();
+            storage::jettons_data~udict_set(256, addr, new_jetton_data);
+            (addr, jetton_data, flag) = jettons_data.udict_get_next?(256, addr);
+        }
+
+        var msg_body = begin_cell()
+            .store_uint(op::internal_transfer(), 32)
+            .store_uint(query_id, 64)
+            .store_coins(inaccurate_jetton_amount / 3)
+            .store_slice(from_user)
+            .store_slice(from_user)
+            .store_coins(0)
+            .store_dict(mint_payload)
+            .store_uint(0, 1)
+            .end_cell();
+
+        slice lm_address = calculate_user_jetton_wallet_fund_address(from_user, my_address(), storage::jettons_data, storage::liquidity_manager_code);
+        cell state_init = calculate_jetton_wallet_fund_state_init(from_user, my_address(), storage::jettons_data, storage::liquidity_manager_code);
+        send_message_with_stateinit(0, lm_address, state_init, msg_body, 64);
+
+        save_data();
+        return ();
+    }
+
+    if (op == 3) { ;; change admin
+        throw_unless(73, equal_slices(sender_address, storage::admin));
+        slice new_storage::admin = in_msg_body~load_msg_addr();
+        save_data();
+        return ();
+    }
+
+    throw(0xffff);
+}
+
+(int, int, slice, cell, cell) get_jetton_data() method_id {
+    load_data();
+    return (calculate_supply(storage::jettons_data), -1, storage::admin, storage::content, storage::liquidity_manager_code);
+}
+
+(cell) get_dict_jetton_data() method_id {
+    load_data();
+    return (storage::jettons_data);
+}
+
+slice get_wallet_address(slice owner_address) method_id {
+    load_data();
+    return calculate_user_jetton_wallet_fund_address(owner_address, my_address(), storage::jettons_data, storage::liquidity_manager_code);
+}
+
+(slice, int, slice, int, slice, int) get_tvl() method_id {
+    load_data();
+    (int index, slice jetton_data, int flag) = storage::jettons_data.udict_get_min?(256);
+    slice jetton_wallet1 = "";
+    int tvl1 = 0;
+    slice jetton_wallet2 = "";
+    int tvl2 = 0;
+    slice jetton_wallet3 = "";
+    int tvl3 = 0;
+    int counter = 0;
+    while (flag) {
+        (_, int jetton_amount) = (jetton_data~load_coins(), jetton_data~load_coins());
+        if (counter == 0){
+            jetton_wallet1 = begin_cell().store_uint(2, 2).store_uint(0, 8).store_uint(0, 1).store_uint(index, 256).end_cell().begin_parse();
+            tvl1 = jetton_amount;
+        }
+        elseif (counter == 1) {
+            jetton_wallet2 = begin_cell().store_uint(2, 2).store_uint(0, 8).store_uint(0, 1).store_uint(index, 256).end_cell().begin_parse();
+            tvl2 = jetton_amount;
+        }
+        else {
+            jetton_wallet3 = begin_cell().store_uint(2, 2).store_uint(0, 8).store_uint(0, 1).store_uint(index, 256).end_cell().begin_parse();
+            tvl3 = jetton_amount;
+        }
+        counter += 1;
+        (index, jetton_data, flag) = storage::jettons_data.udict_get_next?(256, index);
+    }
+    return (jetton_wallet1, tvl1, jetton_wallet2, tvl2, jetton_wallet3, tvl3);
+}
