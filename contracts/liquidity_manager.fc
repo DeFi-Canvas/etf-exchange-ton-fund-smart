@@ -201,7 +201,7 @@ global cell storage::jettons_data;
 
       slice value = begin_cell().store_coins(inaccurate_jetton_amount).end_cell().begin_parse();
       burn_amount~udict_set(256, addr, value);
-      value = begin_cell().store_coins(new_lp_amount).end_cell().begin_parse();
+      value = begin_cell().store_coins(new_lp_amount).store_uint(coef, 8).end_cell().begin_parse();
       storage::jettons_data~udict_set(256, addr, value);
 
       (addr, jetton_data, flag) = storage::jettons_data.udict_get_next?(256, addr);

@@ -6,8 +6,8 @@ import { compile, NetworkProvider } from '@ton/blueprint';
 export async function run(provider: NetworkProvider) {
     const admin = address(process.env.ADMIN ? process.env.ADMIN : "");
     const params = {
-        name: "ETH/NOCO/HAMSTER",
-        description: "ETF of ETH/NOCO/HAMSTER",
+        name: "NOCO/ETH/HAMSTER",
+        description: "ETF of NOCO/ETH/HAMSTER",
         symbol: "ENH",
         decimals: "9",
         image: "https://storage.yandexcloud.net/pure-colors/000000.png"
