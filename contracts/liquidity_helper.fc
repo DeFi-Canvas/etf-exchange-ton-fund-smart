@@ -27,6 +27,29 @@ global int storage::counter;
   );
 }
 
+int is_all_jettons_deposited(cell jettons_data) inline {
+  int is_deposit_ready = true;
+  (int addr, slice jetton_data, int flag) = jettons_data.udict_get_min?(256);
+  while(flag) {
+    (_, int is_deposited) = (jetton_data~load_coins(), jetton_data~load_int(1));
+    if(~ is_deposited) {
+      is_deposit_ready = false;
+    }
+    (addr, jetton_data, flag) = jettons_data.udict_get_next?(256, addr);
+  }
+  return is_deposit_ready;
+}
+
+cell get_default_data(cell jettons_data) inline {
+  cell default_jettons_data = new_dict();
+  slice empty_value = begin_cell().store_coins(0).store_int(false,1).end_cell().begin_parse();
+  (int addr, _, int flag) = jettons_data.udict_get_min?(256);
+  while(flag) {
+    default_jettons_data~udict_set(256, addr, empty_value);
+    (addr, _, flag) = jettons_data.udict_get_next?(256, addr);
+  }
+  return default_jettons_data;
+}
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
   if (in_msg_body.slice_empty?()) { ;; ignore empty messages
@@ -52,10 +75,14 @@ global int storage::counter;
   slice jetton_wallet = in_msg_body~load_msg_addr();
   int jetton_amount = in_msg_body~load_coins();
   (int wc, int addr) = parse_std_addr(jetton_wallet);
-  slice value = begin_cell().store_coins(jetton_amount).end_cell().begin_parse();
-  storage::jettons_data~udict_add?(256, addr, value);
-  storage::counter += 1;
-  if (storage::counter == 3) {
+
+  (slice current_jetton_data, int flag) = storage::jettons_data.udict_get?(256, addr);
+  int current_jettons_amount = current_jetton_data~load_coins();
+  slice value = begin_cell().store_coins(current_jettons_amount + jetton_amount).store_int(true, 1).end_cell().begin_parse();
+  storage::jettons_data~udict_set(256, addr, value);
+
+  int is_deposit_ready = is_all_jettons_deposited(storage::jettons_data);
+  if(is_deposit_ready) {
     var msg = begin_cell()
         .store_uint(op::deposit_liquidity(), 32)
         .store_uint(query_id, 64)
@@ -63,8 +90,7 @@ global int storage::counter;
         .store_dict(storage::jettons_data)
         .end_cell();
     send_simple_message(0, storage::fund_addr, msg, 128);
-    storage::jettons_data = new_dict();
-    storage::counter = 0;
+    storage::jettons_data = get_default_data(storage::jettons_data);
   }
   save_data();
   return ();

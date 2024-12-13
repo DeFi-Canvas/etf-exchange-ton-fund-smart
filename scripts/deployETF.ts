@@ -1,14 +1,14 @@
 import 'dotenv/config';
-import { toNano, address, Cell, beginCell, Dictionary } from '@ton/core';
-import { JettonMinter, buildOnchainMetadata, jettonContentToCell } from '../wrappers/Fund';
+import { toNano, address, beginCell, Dictionary } from '@ton/core';
+import { JettonMinter, buildOnchainMetadata } from '../wrappers/Fund';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
     const admin = address(process.env.ADMIN ? process.env.ADMIN : "");
     const params = {
-        name: "NOCO/ETH/HAMSTER",
-        description: "ETF of NOCO/ETH/HAMSTER",
-        symbol: "ENH",
+        name: "HAMSTER/NOCO/ETH",
+        description: "ETF of HAMSTER/NOCO/ETH",
+        symbol: "HNE",
         decimals: "9",
         image: "https://storage.yandexcloud.net/pure-colors/000000.png"
     }

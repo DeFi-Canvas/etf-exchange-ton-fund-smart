@@ -109,6 +109,12 @@ global int storage::init;
             int burn_lp_amount = burn_jetton_data~load_coins();
             (int lp_amount, int jetton_amount, int coef, int swap_type, slice swap_addr1, slice swap_addr2) = (jettons_data~load_coins(), jettons_data~load_coins(), jettons_data~load_uint(8), jettons_data~load_uint(8), jettons_data~load_msg_addr(), jettons_data~load_msg_addr());
             int withdraw_jetton_amount = burn_lp_amount * jetton_amount / lp_amount;
+            if(withdraw_jetton_amount > jetton_amount) {
+                withdraw_jetton_amount = jetton_amount;
+            }
+            if(burn_lp_amount > lp_amount) {
+                burn_lp_amount = lp_amount;
+            }
             slice value = begin_cell()
                     .store_coins(lp_amount - burn_lp_amount)
                     .store_coins(jetton_amount - withdraw_jetton_amount)
@@ -182,7 +188,7 @@ global int storage::init;
 
             ;; send message to liquidity helper
             slice from_user = forward_payload~load_msg_addr();
-            (slice lh_address, cell state_init) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code);
+            (slice lh_address, cell state_init) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code, storage::jettons_data);
             var msg = begin_cell()
                 .store_uint(op::deposit_liquidity(), 32)
                 .store_uint(query_id, 64)
@@ -245,7 +251,7 @@ global int storage::init;
 
     if (op == op::deposit_liquidity()) {
         slice from_user = in_msg_body~load_msg_addr();
-        (slice lh_address, _) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code);
+        (slice lh_address, _) = calculate_liquidity_helper_address_and_stateinit(from_user, my_address(), storage::liquidity_helper_code, storage::jettons_data);
         throw_unless(119, equal_slices(lh_address, sender_address));
         cell mint_payload = new_dict();
         cell jettons_data = in_msg_body~load_dict();

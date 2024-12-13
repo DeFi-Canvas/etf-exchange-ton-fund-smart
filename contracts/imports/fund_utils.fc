@@ -15,13 +15,27 @@ cell pack_liquidity_helper_data(slice user_address, slice fund_address, cell jet
            .end_cell();
 }
 
-(slice, cell) calculate_liquidity_helper_address_and_stateinit(slice user_address, slice fund_address, cell code) inline {
+
+cell get_liquidity_helper_jettons_data(cell jettons) inline {
+    cell liquidity_helper_jettons_data = new_dict();
+    slice empty_data = begin_cell().store_coins(0).store_int(false,1).end_cell().begin_parse();
     
-    cell jettons = new_dict();
+    (int addr, _, int flag) = jettons.udict_get_min?(256);
+    while(flag) {
+          liquidity_helper_jettons_data~udict_set(256, addr, empty_data);
+            (addr, _, flag) = jettons.udict_get_next?(256, addr);
+    }
+
+    return (liquidity_helper_jettons_data);
+}
+
+(slice, cell) calculate_liquidity_helper_address_and_stateinit(slice user_address, slice fund_address, cell code, cell jettons_data) inline {
+    
+    cell liquidity_helper_jettons_data = get_liquidity_helper_jettons_data(jettons_data);
     cell state_init = begin_cell()
           .store_uint(0, 2)
           .store_dict(code)
-          .store_dict(pack_liquidity_helper_data(user_address, fund_address, jettons))
+          .store_dict(pack_liquidity_helper_data(user_address, fund_address, liquidity_helper_jettons_data))
           .store_uint(0, 1)
          .end_cell();
 

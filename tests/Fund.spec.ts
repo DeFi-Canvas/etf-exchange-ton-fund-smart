@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, Dictionary, beginCell, address, Address } from '@ton/core';
+import { Cell, toNano, Dictionary, beginCell, address } from '@ton/core';
 import { JettonMinter, jettonContentToCell } from '../wrappers/Fund';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -63,12 +63,9 @@ describe('Fund', () => {
             deploy: true,
             success: true,
         });
-        const rawBody = "b5ee9c72010101010024000043800eecdbd4566ec867188c90b36c3ecd63c79a4fca4bd8781ae470a17ab58fa93370"
-        const body = Cell.fromBoc(Buffer.from(rawBody, "hex"))[0].beginParse()
-        console.log("1", body.loadAddress())
-        // console.log("2", body.loadUintBig(256).toString())
-        // console.log("3", body.loadUintBig(256).toString())
-        // console.log("4", body.loadUintBig(256).toString())
+        // const rawBody = "b5ee9c720102050100016a00020120010200e3bfcef13d1fbdb09214201a06a4d4369562600c52c29ce1f67dca21fddade5eef94b009187ae275fad8df0d8d0c0a00c00bdb67c9f3aaa6e46baaa22a21678d416f8eed8f98970159b39f4541810ff68f48009269923effe2922637b693b95d2129e6fe53a8cd3fb6b81847358e06cf90cb85020120030400e7bfbe1497c0ee146ef5ff32f9e97045d35da98219d9abab69a035cfb44072794929601afd44ef7c172bf8b4da383a633202800170fc482090515dc15e947002affa4b338960b3bb51da54985927f07f640d8b50016c98e76a104c19b3142708405cb9fc0628a07065cc261482d25ec3061758001a00e7bfb4302cc0c16abc371b1c3925536404dbc5ad542513e5a8faa0835633e19503e26018ea28788397ced4d44dd3f45b1e02800170fc482090515dc15e947002affa4b338960b3bb51da54985927f07f640d8b50016c98e76a104c19b3142708405cb9fc0628a07065cc261482d25ec3061758001a"
+        // const body = Cell.fromBoc(Buffer.from(rawBody, "hex"))[0].beginParse()
+
         // expect(deployResult.transactions).toHaveTransaction({
         //     from: Fund.address,
         //     to: address("kQB88kLQzgInBdT1E2RGOhGIK8NWPEYi8HLQzhVKOn0itufH"),
