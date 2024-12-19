@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, Dictionary, beginCell, address } from '@ton/core';
+import { Cell, toNano, Dictionary, beginCell, address, DictionaryValue, Slice, fromNano } from '@ton/core';
 import { JettonMinter, jettonContentToCell } from '../wrappers/Fund';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -35,27 +35,45 @@ describe('Fund', () => {
             .set(0, beginCell().storeAddress(address("EQA2kCVNwVsil2EM2mB0SkXytxCqQjS4mttjDpnXmwG9T6bO")).storeUint(20, 8).storeUint(swapTypeStonFi, 8).storeAddress(stonfi_router).storeAddress(p_ton_wallet).endCell())
             .set(1, beginCell().storeAddress(address("EQCl0S4xvoeGeFGijTzicSA8j6GiiugmJW5zxQbZTUntre-1")).storeUint(30, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell())
             .set(2, beginCell().storeAddress(address("EQBlqsm144Dq6SjbPI4jjZvA1hqTIP3CvHovbIfW_t-SCALE")).storeUint(50, 8).storeUint(swapTypeDedust, 8).storeAddress(pool_addr).storeAddress(jetton_vault).endCell());
-
+        const defaultJettonData = beginCell()
+            .storeCoins(toNano(100))
+            .storeCoins(toNano(10))
+            .storeUint(20, 8)
+            .storeUint(swapTypeStonFi, 8)
+            .storeAddress(admin)
+            .storeAddress(admin)
+            .endCell().beginParse()
+        const sliceDictValue: DictionaryValue<Slice> = {
+            serialize(src, builder) {
+                return builder.storeSlice(src)
+            },
+            parse(src) {
+                return src
+            }
+        }
+        const jetton_data = Dictionary.empty(Dictionary.Keys.Uint(256), sliceDictValue).set(0, defaultJettonData).set(0, defaultJettonData)
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
-                    admin: admin,
-                    content: content,
-                    lm_code: lm_code,
-                    lh_code: lh_code,
+                    admin,
+                    content,
+                    lm_code,
+                    lh_code,
+                    jetton_data,
+                    init: 1
                 },
                 await compile('Fund')
             )
         );
 
 
-        let msg_body = beginCell()
-            .storeUint(0x29c102d1, 32)
-            .storeUint(0, 64)
-            .storeDict(jetton_masters,)
-            .endCell();
+        // let msg_body = beginCell()
+        //     .storeUint(0x29c102d1, 32)
+        //     .storeUint(0, 64)
+        //     .storeDict(jetton_masters,)
+        //     .endCell();
 
-        const deployResult = await Fund.sendDeploy(deployer.getSender(), toNano('0.25'), msg_body);
+        const deployResult = await Fund.sendDeploy(deployer.getSender(), toNano('0.25'));
 
         expect(deployResult.transactions).toHaveTransaction({
             from: deployer.address,
@@ -76,6 +94,13 @@ describe('Fund', () => {
     it('should deploy', async () => {
         // the check is done inside beforeEach
         // blockchain and circusVault are ready to use
+    });
 
+    it("should take fees", async () => {
+        const res = await Fund.sendTakeFees(deployer.getSender())
+        const jettonWalletAddress = await Fund.getWalletAddress(deployer.address)
+        const jettonWallet = await blockchain.getContract(jettonWalletAddress)
+        const walletDataRes = await jettonWallet.get("get_wallet_data")
+        expect(fromNano(walletDataRes.stackReader.readBigNumber())).toEqual("2")
     });
 });

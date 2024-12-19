@@ -11,6 +11,7 @@ int op::swap_notification() asm "0x278f5089 PUSHINT";
 int op::swap_successed() asm "0x4ff49f26 PUSHINT";
 int op::swap_failed() asm "0xb27195e8 PUSHINT";
 int op::deposit_liquidity() asm "0x69fa9bd4 PUSHINT";
+int op::take_fees() asm "0xbd1be6ce PUSHINT";
 int op::init() asm "0x29c102d1 PUSHINT";
 int op::get_jetton_minter_addr() asm "0xc2e7027b PUSHINT";
 int op::deploy_LM() asm "0x8367f32a PUSHINT";
