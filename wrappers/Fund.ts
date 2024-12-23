@@ -90,14 +90,14 @@ export class JettonMinter implements Contract {
             .endCell();
 
     }
-    static mintMessage(from: Address, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, query_id: number | bigint = 0) {
+    static mintMessage(from: Address, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, custom_payload: Dictionary<any, any>, query_id: number | bigint = 0) {
         const mintMsg = beginCell().storeUint(Op.internal_transfer, 32)
             .storeUint(0, 64)
             .storeCoins(jetton_amount)
-            .storeAddress(null)
+            .storeAddress(from)
             .storeAddress(from) // Response addr
             .storeCoins(forward_ton_amount)
-            .storeMaybeRef(null)
+            .storeDict(custom_payload)
             .endCell();
 
         return beginCell().storeUint(Op.mint, 32).storeUint(query_id, 64) // op, queryId
@@ -107,13 +107,13 @@ export class JettonMinter implements Contract {
             .storeRef(mintMsg)
             .endCell();
     }
-    async sendMint(provider: ContractProvider, via: Sender, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint) {
+    async sendMint(provider: ContractProvider, via: Sender, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, custom_payload: Dictionary<any, any>) {
         if (total_ton_amount <= forward_ton_amount) {
             throw new Error("Total ton amount should be > forward amount");
         }
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: JettonMinter.mintMessage(this.address, to, jetton_amount, forward_ton_amount, total_ton_amount),
+            body: JettonMinter.mintMessage(this.address, to, jetton_amount, forward_ton_amount, total_ton_amount, custom_payload),
             value: total_ton_amount + toNano('0.015'),
         });
     }
