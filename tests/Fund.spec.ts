@@ -1,5 +1,5 @@
 import { Blockchain, SandboxContract, TreasuryContract } from '@ton/sandbox';
-import { Cell, toNano, Dictionary, beginCell, address } from '@ton/core';
+import { Cell, toNano, Dictionary, beginCell, address, DictionaryValue, Slice, fromNano, Message, CommonMessageInfoInternal } from '@ton/core';
 import { JettonMinter, jettonContentToCell } from '../wrappers/Fund';
 import '@ton/test-utils';
 import { compile } from '@ton/blueprint';
@@ -39,10 +39,10 @@ describe('Fund', () => {
         Fund = blockchain.openContract(
             JettonMinter.createFromConfig(
                 {
-                    admin: admin,
-                    content: content,
-                    lm_code: lm_code,
-                    lh_code: lh_code,
+                    admin,
+                    content,
+                    lm_code,
+                    lh_code
                 },
                 await compile('Fund')
             )
@@ -76,6 +76,135 @@ describe('Fund', () => {
     it('should deploy', async () => {
         // the check is done inside beforeEach
         // blockchain and circusVault are ready to use
+    });
 
+    it("should take fees", async () => {
+        let admin = deployer.address;
+        let content = jettonContentToCell({ type: 0, uri: "" });
+        const lm_code = await compile("Liquidity manager");
+        const lh_code = await compile("Liquidity helper");
+        const swapTypeStonFi = 2;
+        const defaultJettonData = beginCell()
+            .storeCoins(toNano(100))
+            .storeCoins(toNano(10))
+            .storeUint(20, 8)
+            .storeUint(swapTypeStonFi, 8)
+            .storeAddress(admin)
+            .storeAddress(admin)
+            .endCell().beginParse()
+        const sliceDictValue: DictionaryValue<Slice> = {
+            serialize(src, builder) {
+                return builder.storeSlice(src)
+            },
+            parse(src) {
+                return src
+            }
+        }
+        const jetton_data = Dictionary.empty(Dictionary.Keys.Uint(256), sliceDictValue).set(0, defaultJettonData).set(0, defaultJettonData)
+        const fund = blockchain.openContract(
+            JettonMinter.createFromConfig(
+                {
+                    admin,
+                    content,
+                    lm_code,
+                    lh_code,
+                    jetton_data,
+                    init: 1
+                },
+                await compile('Fund')
+            )
+        );
+
+        const deployResult = await fund.sendDeploy(deployer.getSender(), toNano('0.25'));
+        expect(deployResult.transactions).toHaveTransaction({
+            from: deployer.address,
+            to: fund.address,
+            deploy: true,
+            success: true,
+        });
+        await fund.sendTakeFees(deployer.getSender())
+        const jettonWalletAddress = await fund.getWalletAddress(deployer.address)
+        const jettonWallet = await blockchain.getContract(jettonWalletAddress)
+        const walletDataRes = await jettonWallet.get("get_wallet_data")
+        expect(fromNano(walletDataRes.stackReader.readBigNumber())).toEqual("2")
+    });
+
+    it("should send fees after burn", async () => {
+        let admin = deployer.address;
+        let content = jettonContentToCell({ type: 0, uri: "" });
+        const lm_code = await compile("Liquidity manager");
+        const lh_code = await compile("Liquidity helper");
+        const swapTypeStonFi = 2;
+        const defaultJettonData = beginCell()
+            .storeCoins(toNano(100))
+            .storeCoins(toNano(10))
+            .storeUint(20, 8)
+            .storeUint(swapTypeStonFi, 8)
+            .storeAddress(admin)
+            .storeAddress(admin)
+            .endCell().beginParse()
+        const sliceDictValue: DictionaryValue<Slice> = {
+            serialize(src, builder) {
+                return builder.storeSlice(src)
+            },
+            parse(src) {
+                return src
+            }
+        }
+        const jetton_data = Dictionary.empty(Dictionary.Keys.Uint(256), sliceDictValue).set(0, defaultJettonData).set(1, defaultJettonData)
+        const fund = blockchain.openContract(
+            JettonMinter.createFromConfig(
+                {
+                    admin,
+                    content,
+                    lm_code,
+                    lh_code,
+                    jetton_data,
+                    init: 1
+                },
+                await compile('Fund')
+            )
+        );
+
+        const deployResult = await fund.sendDeploy(deployer.getSender(), toNano('0.25'));
+        expect(deployResult.transactions).toHaveTransaction({
+            from: deployer.address,
+            to: fund.address,
+            deploy: true,
+            success: true,
+        });
+        const jettonData = beginCell()
+            .storeCoins(toNano(10))
+            .storeUint(Math.floor(Date.now() / 1000), 64)
+            .endCell().beginParse()
+        const custom_payload = Dictionary.empty(Dictionary.Keys.Uint(256), sliceDictValue).set(0, jettonData).set(1, jettonData)
+        await fund.sendMint(deployer.getSender(), deployer.address, toNano(10000), toNano(1), toNano(2), custom_payload)
+        const totalSupply = await fund.getTotalSupply()
+        const jettonWalletAddress = await fund.getWalletAddress(deployer.address)
+        const jettonWallet = await blockchain.getContract(jettonWalletAddress)
+        const walletDataRes = await jettonWallet.get("get_wallet_data")
+        const info: CommonMessageInfoInternal = {
+            type: 'internal',
+            ihrDisabled: true,
+            bounce: true,
+            bounced: false,
+            src: deployer.address,
+            dest: jettonWallet.address,
+            value: {
+                coins: 1000000000n
+            },
+            ihrFee: 0n,
+            forwardFee: 0n,
+            createdLt: BigInt(Math.floor(Date.now() / 1000)),
+            createdAt: Math.floor(Date.now() / 1000)
+        }
+        const body = beginCell().storeUint(0x595f07bc, 32).storeUint(0, 64) // op, queryId
+            .storeCoins(walletDataRes.stackReader.readBigNumber())
+            .storeMaybeRef(null)
+            .endCell()
+        const msg: Message = { info, body }
+        await jettonWallet.blockchain.sendMessage(msg)
+        const secondRes = await jettonWallet.get("get_wallet_data")
+        expect(fromNano(secondRes.stackReader.readBigNumber())).toEqual("0.1")
     });
 });

@@ -30,7 +30,7 @@ export type JettonMinterContent = {
     uri: string
 };
 
-export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell };
+export type JettonMinterConfig = { admin: Address; content: Cell; lm_code: Cell, lh_code: Cell, jetton_data?: Dictionary<any, any>, init?: number };
 
 export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
     const codebase = beginCell()
@@ -39,10 +39,10 @@ export function jettonMinterConfigToCell(config: JettonMinterConfig): Cell {
         .endCell()
     return beginCell()
         .storeAddress(config.admin)
-        .storeDict(Dictionary.empty())
+        .storeDict(config.jetton_data ? config.jetton_data : Dictionary.empty())
         .storeRef(config.content)
         .storeRef(codebase)
-        .storeUint(0, 1)
+        .storeUint(config.init ? config.init : 0, 1)
         .endCell();
 }
 
@@ -66,11 +66,11 @@ export class JettonMinter implements Contract {
         return new JettonMinter(contractAddress(workchain, init), init);
     }
 
-    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint, msg_body: Cell) {
+    async sendDeploy(provider: ContractProvider, via: Sender, value: bigint, msg_body?: Cell) {
         await provider.internal(via, {
             value,
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: msg_body,
+            body: msg_body ? msg_body : null,
         });
     }
 
@@ -90,14 +90,14 @@ export class JettonMinter implements Contract {
             .endCell();
 
     }
-    static mintMessage(from: Address, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, query_id: number | bigint = 0) {
+    static mintMessage(from: Address, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, custom_payload: Dictionary<any, any>, query_id: number | bigint = 0) {
         const mintMsg = beginCell().storeUint(Op.internal_transfer, 32)
             .storeUint(0, 64)
             .storeCoins(jetton_amount)
-            .storeAddress(null)
+            .storeAddress(from)
             .storeAddress(from) // Response addr
             .storeCoins(forward_ton_amount)
-            .storeMaybeRef(null)
+            .storeDict(custom_payload)
             .endCell();
 
         return beginCell().storeUint(Op.mint, 32).storeUint(query_id, 64) // op, queryId
@@ -107,13 +107,13 @@ export class JettonMinter implements Contract {
             .storeRef(mintMsg)
             .endCell();
     }
-    async sendMint(provider: ContractProvider, via: Sender, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint) {
+    async sendMint(provider: ContractProvider, via: Sender, to: Address, jetton_amount: bigint, forward_ton_amount: bigint, total_ton_amount: bigint, custom_payload: Dictionary<any, any>) {
         if (total_ton_amount <= forward_ton_amount) {
             throw new Error("Total ton amount should be > forward amount");
         }
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
-            body: JettonMinter.mintMessage(this.address, to, jetton_amount, forward_ton_amount, total_ton_amount),
+            body: JettonMinter.mintMessage(this.address, to, jetton_amount, forward_ton_amount, total_ton_amount, custom_payload),
             value: total_ton_amount + toNano('0.015'),
         });
     }
@@ -149,11 +149,24 @@ export class JettonMinter implements Contract {
             .endCell();
     }
 
+    static takeFeesMessage() {
+        return beginCell().storeUint(0xbd1be6ce, 32).storeUint(0, 64) // op, queryId
+            .endCell();
+    }
+
     async sendDeposit(provider: ContractProvider, via: Sender, msg: Cell) {
         await provider.internal(via, {
             sendMode: SendMode.PAY_GAS_SEPARATELY,
             body: JettonMinter.depositMessage(msg),
             value: toNano(5),
+        });
+    }
+
+    async sendTakeFees(provider: ContractProvider, via: Sender) {
+        await provider.internal(via, {
+            sendMode: SendMode.PAY_GAS_SEPARATELY,
+            body: JettonMinter.takeFeesMessage(),
+            value: toNano(1),
         });
     }
 
@@ -202,6 +215,12 @@ export class JettonMinter implements Contract {
             content,
             walletCode
         };
+    }
+
+    async getDictJettonData(provider: ContractProvider) {
+        let res = await provider.get('get_dict_jetton_data', []);
+        const dict = res.stack.readCell()
+        // console.log(Dictionary.loadDirect(Dictionary.Keys.Uint(256), Dictionary.Values.Cell(), dict))
     }
 
     async getTotalSupply(provider: ContractProvider) {
